@@ -1,0 +1,42 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Profiles Collection
+    match /profiles/{userId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Item Reports Collection
+    match /item_reports/{reportId} {
+      // 1. Read: Public can view active reports; reporters can also view their own resolved reports
+      allow read: if resource.data.status == 'active' 
+                  || (request.auth != null && resource.data.reporter_id == request.auth.uid);
+
+      // 2. Create: Authenticated users can create reports under their own uid (or null for anonymous)
+      allow create: if request.resource.data.item_name is string
+                    && request.resource.data.description is string
+                    && request.resource.data.category is string
+                    && request.resource.data.campus_location is string
+                    && request.resource.data.report_type in ['lost', 'found']
+                    && request.resource.data.status in ['active', 'resolved']
+                    && (request.resource.data.reporter_id == null || (request.auth != null && request.resource.data.reporter_id == request.auth.uid));
+
+      // 3. Update: Users can update ONLY their own reports; cannot reassign reporter_id
+      allow update: if request.auth != null 
+                    && resource.data.reporter_id == request.auth.uid
+                    && request.resource.data.reporter_id == resource.data.reporter_id;
+
+      // 4. Delete: Users can delete ONLY their own reports
+      allow delete: if request.auth != null 
+                    && resource.data.reporter_id == request.auth.uid;
+    }
+
+    // Item Matches Collection
+    match /item_matches/{matchId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+  }
+}
